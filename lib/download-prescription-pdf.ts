@@ -63,7 +63,7 @@ function buildContentStream(lines: string[], startY: number, lineGap: number): s
   return ops
 }
 
-function concatBytes(chunks: Uint8Array[]): Uint8Array {
+function concatBytes(chunks: Uint8Array[]): Uint8Array<ArrayBuffer> {
   let n = 0
   for (const c of chunks) n += c.length
   const out = new Uint8Array(n)
@@ -72,7 +72,7 @@ function concatBytes(chunks: Uint8Array[]): Uint8Array {
     out.set(c, o)
     o += c.length
   }
-  return out
+  return out as Uint8Array<ArrayBuffer>
 }
 
 const LINES_PER_PAGE = 52
@@ -80,7 +80,7 @@ const LINE_GAP = 14
 const START_Y = 780
 const MAX_CHARS = 85
 
-function buildPdfFromStreams(pageStreams: string[]): Uint8Array {
+function buildPdfFromStreams(pageStreams: string[]): Uint8Array<ArrayBuffer> {
   const nPages = pageStreams.length
   const maxObj = 3 + 2 * nPages
   const offsets: number[] = new Array(maxObj + 1).fill(0)

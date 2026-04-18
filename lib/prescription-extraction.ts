@@ -54,17 +54,16 @@ export function parsePrescriptionAnalysis(raw: string): PrescriptionAnalysis {
   }
   const medications = data.medications
     .filter((m) => m && typeof m === "object" && typeof (m as PrescriptionMedication).name === "string")
-    .map((m) => ({
-      name: String((m as PrescriptionMedication).name).trim(),
-      instructions:
-        typeof (m as PrescriptionMedication).instructions === "string"
-          ? (m as PrescriptionMedication).instructions.trim() || null
-          : null,
-      warning:
-        typeof (m as PrescriptionMedication).warning === "string"
-          ? (m as PrescriptionMedication).warning.trim() || null
-          : null,
-    }))
+    .map((m) => {
+      const med = m as PrescriptionMedication
+      const instructions = med.instructions
+      const warning = med.warning
+      return {
+        name: String(med.name).trim(),
+        instructions: typeof instructions === "string" ? instructions.trim() || null : null,
+        warning: typeof warning === "string" ? warning.trim() || null : null,
+      }
+    })
     .filter((m) => m.name.length > 0)
 
   const summary =

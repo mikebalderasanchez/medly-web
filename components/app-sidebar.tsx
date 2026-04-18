@@ -1,16 +1,9 @@
 "use client"
 
 import * as React from "react"
-import {
-  Users,
-  Stethoscope,
-  BarChart,
-  Settings,
-  Home,
-  Building2,
-  UserCog,
-} from "lucide-react"
+import { Users, Stethoscope, BarChart, Settings, Home, Building2, UserCog } from "lucide-react"
 
+import { MedlyLogoMark } from "@/components/brand/MedlyLogoMark"
 import { ClinicLogoutMenuItem } from "@/components/clinic/clinic-logout-button"
 import { CLINIC_ROLES } from "@/lib/clinic-auth-roles"
 import {
@@ -62,8 +55,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar variant="inset" collapsible="icon" {...props}>
       <SidebarHeader className="pt-6 pb-2 px-6 group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:pt-4">
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
-          <div className="flex aspect-square size-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#0d4a8a] text-white shadow-md shadow-primary/20 group-data-[collapsible=icon]:size-8 shrink-0">
-            <Stethoscope className="size-5 group-data-[collapsible=icon]:size-4" />
+          <div className="flex aspect-square size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-md shadow-primary/20 group-data-[collapsible=icon]:size-8">
+            <MedlyLogoMark decorative className="size-full" />
           </div>
           <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
             <span className="font-bold tracking-tight text-xl text-foreground">Medly</span>

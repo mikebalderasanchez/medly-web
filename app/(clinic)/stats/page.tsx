@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { BarChart, Activity, Users, FileText, TrendingUp, Clock } from "lucide-react"
+import { Activity, Users, FileText, TrendingUp, Clock } from "lucide-react"
 
 export default function StatsPage() {
   return (

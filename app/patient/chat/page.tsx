@@ -79,23 +79,32 @@ function buildWelcomeBlocks(
 function readExpedienteRecord(): PatientExpedienteRecord | null {
   const s = readStoredExpedienteContext()
   if (!s) return null
-  const { savedAt: _savedAt, ...rest } = s
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- strip persisted metadata
+  const { savedAt, ...rest } = s
   return rest
 }
 
 function readPrescriptionRecord(): PrescriptionAnalysis | null {
   const s = readStoredPrescriptionContext()
   if (!s) return null
-  const { savedAt: _savedAt, ...rest } = s
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- strip persisted metadata
+  const { savedAt, ...rest } = s
   return rest
 }
 
 export default function PatientChat() {
-  const [prescriptionContext, setPrescriptionContext] = useState<PrescriptionAnalysis | null>(null)
-  const [expedienteContext, setExpedienteContext] = useState<PatientExpedienteRecord | null>(null)
-  const [messages, setMessages] = useState<Message[]>([
-    { id: "welcome", role: "assistant", blocks: buildWelcomeBlocks(null, null) },
-  ])
+  const [bootstrap] = useState(() => {
+    const rx = readPrescriptionRecord()
+    const ex = readExpedienteRecord()
+    return {
+      rx,
+      ex,
+      messages: [{ id: "welcome", role: "assistant", blocks: buildWelcomeBlocks(rx, ex) }] as Message[],
+    }
+  })
+  const [prescriptionContext, setPrescriptionContext] = useState(bootstrap.rx)
+  const [expedienteContext, setExpedienteContext] = useState(bootstrap.ex)
+  const [messages, setMessages] = useState(bootstrap.messages)
   const [input, setInput] = useState("")
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -104,14 +113,6 @@ export default function PatientChat() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const hasContext = hasPatientChatContext(prescriptionContext, expedienteContext)
-
-  useEffect(() => {
-    const rx = readPrescriptionRecord()
-    const ex = readExpedienteRecord()
-    if (rx) setPrescriptionContext(rx)
-    if (ex) setExpedienteContext(ex)
-    setMessages([{ id: "welcome", role: "assistant", blocks: buildWelcomeBlocks(rx, ex) }])
-  }, [])
 
   useEffect(() => {
     if (scrollRef.current) {

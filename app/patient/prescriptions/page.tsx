@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import NextImage from "next/image"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { UploadCloud, Camera, ImagePlus, X, Loader2, CheckCircle2 } from "lucide-react"
@@ -178,8 +179,15 @@ export default function PrescriptionsPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-6">
-          <div className="relative overflow-hidden rounded-3xl border border-border/80 shadow-md">
-            <img src={previewUrl} alt="Vista previa de la receta" className="h-64 w-full object-cover object-center" />
+          <div className="relative h-64 w-full overflow-hidden rounded-3xl border border-border/80 shadow-md">
+            <NextImage
+              src={previewUrl}
+              alt="Vista previa de la receta"
+              fill
+              className="object-cover object-center"
+              sizes="100vw"
+              unoptimized
+            />
             <div className="absolute right-2 top-2">
               <Button
                 variant="destructive"

@@ -35,11 +35,14 @@ export function ClinicHeaderProfile() {
   }, [])
 
   useEffect(() => {
-    void load()
-    const onLocal = () => void load()
+    const t = window.setTimeout(() => void load(), 0)
+    const onLocal = () => {
+      window.setTimeout(() => void load(), 0)
+    }
     window.addEventListener("medly:clinic-settings-updated", onLocal)
     window.addEventListener("medly:auth-profile-updated", onLocal)
     return () => {
+      window.clearTimeout(t)
       window.removeEventListener("medly:clinic-settings-updated", onLocal)
       window.removeEventListener("medly:auth-profile-updated", onLocal)
     }

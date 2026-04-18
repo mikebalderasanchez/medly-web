@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import {
   applyThemePreference,
-  DEFAULT_CLINIC_SETTINGS,
   type ClinicSettings,
   readClinicSettings,
   resetClinicSettings,
@@ -48,14 +47,12 @@ type AuthMeUser = {
 }
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<ClinicSettings>(DEFAULT_CLINIC_SETTINGS)
+  const [settings, setSettings] = useState<ClinicSettings>(() => readClinicSettings())
   const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState<string | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
 
   useEffect(() => {
-    const local = readClinicSettings()
-    setSettings(local)
     let cancelled = false
     void (async () => {
       try {

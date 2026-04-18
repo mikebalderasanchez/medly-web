@@ -48,12 +48,13 @@ export function HospitalTeamView() {
     } catch {
       setListError(true)
     } finally {
-      if (showSpinner) setListLoading(false)
+      setListLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    void refresh(true)
+    const t = window.setTimeout(() => void refresh(false), 0)
+    return () => window.clearTimeout(t)
   }, [refresh])
 
   const onCreate = async (e: React.FormEvent) => {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import {
   applyThemePreference,
@@ -16,11 +16,7 @@ import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Eraser, Monitor, Moon, Sun } from "lucide-react"
 
 export default function PatientSettingsPage() {
-  const [theme, setTheme] = useState<ThemePreference>("system")
-
-  useEffect(() => {
-    setTheme(readClinicSettings().theme)
-  }, [])
+  const [theme, setTheme] = useState<ThemePreference>(() => readClinicSettings().theme)
 
   const setThemeChoice = (t: ThemePreference) => {
     const next = writeClinicSettings({ ...readClinicSettings(), theme: t })
@@ -41,7 +37,7 @@ export default function PatientSettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start gap-3">
-        <Button variant="outline" size="icon" className="shrink-0 rounded-full" asChild>
+        <Button variant="outline" size="icon" className="shrink-0 rounded-full">
           <Link href="/patient" aria-label="Volver al inicio">
             <ArrowLeft className="h-4 w-4" />
           </Link>

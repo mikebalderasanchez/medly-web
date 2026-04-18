@@ -93,14 +93,6 @@ function SaveConsultationConsentDialog({
   const [manualDetail, setManualDetail] = useState("")
   const [formError, setFormError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!open) return
-    setAgreed(null)
-    setManualReason("")
-    setManualDetail("")
-    setFormError(null)
-  }, [open])
-
   const handleSave = async () => {
     setFormError(null)
     if (agreed === null) {
@@ -119,7 +111,18 @@ function SaveConsultationConsentDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          setAgreed(null)
+          setManualReason("")
+          setManualDetail("")
+          setFormError(null)
+        }
+        onOpenChange(next)
+      }}
+    >
       <DialogContent className="sm:max-w-lg" showCloseButton={!isSaving}>
         <DialogHeader>
           <DialogTitle>Conformidad del paciente</DialogTitle>
@@ -223,6 +226,7 @@ function NewConsultationPageInner() {
   const [displayName, setDisplayName] = useState("consulta.webm")
   const [recordingSeconds, setRecordingSeconds] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewUrlRef = useRef<string | null>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<BlobPart[]>([])
@@ -237,21 +241,32 @@ function NewConsultationPageInner() {
     }
   }
 
-  useEffect(() => {
-    const source = uploadedFile ?? recordedBlob
-    if (!source) {
-      setPreviewUrl(null)
-      return
+  const revokePreviewUrl = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = null
     }
-    const url = URL.createObjectURL(source)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [uploadedFile, recordedBlob])
+    setPreviewUrl(null)
+  }, [])
+
+  const bindPreviewToSource = useCallback(
+    (source: Blob) => {
+      revokePreviewUrl()
+      const url = URL.createObjectURL(source)
+      previewUrlRef.current = url
+      setPreviewUrl(url)
+    },
+    [revokePreviewUrl],
+  )
 
   useEffect(() => {
     return () => {
       stopTick()
       streamRef.current?.getTracks().forEach((t) => t.stop())
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current)
+        previewUrlRef.current = null
+      }
     }
   }, [])
 
@@ -260,7 +275,6 @@ function NewConsultationPageInner() {
       stopTick()
       return
     }
-    setRecordingSeconds(0)
     tickRef.current = setInterval(() => {
       setRecordingSeconds((s) => s + 1)
     }, 1000)
@@ -273,6 +287,7 @@ function NewConsultationPageInner() {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     chunksRef.current = []
+    revokePreviewUrl()
     setRecordedBlob(null)
     setUploadedFile(null)
     setHasAudio(false)
@@ -324,11 +339,13 @@ function NewConsultationPageInner() {
         setRecordedBlob(blob)
         setUploadedFile(null)
         setDisplayName(blob.type.includes("webm") ? "consulta.webm" : "consulta.m4a")
+        bindPreviewToSource(blob)
         setHasAudio(true)
         setIsRecording(false)
       }
 
       mr.start()
+      setRecordingSeconds(0)
       setIsRecording(true)
       setHasAudio(false)
     } catch {
@@ -356,6 +373,7 @@ function NewConsultationPageInner() {
     setRecordedBlob(null)
     setUploadedFile(file)
     setDisplayName(file.name)
+    bindPreviewToSource(file)
     setRecordingSeconds(0)
     setHasAudio(true)
     setIsRecording(false)

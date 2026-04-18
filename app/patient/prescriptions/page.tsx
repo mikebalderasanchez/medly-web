@@ -12,6 +12,7 @@ import { getOrCreatePatientDeviceId } from "@/lib/patient-device-id"
 export default function PrescriptionsPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
+  const previewUrlRef = useRef<string | null>(null)
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -20,25 +21,40 @@ export default function PrescriptionsPage() {
   const [demoNotice, setDemoNotice] = useState<string | null>(null)
   const [result, setResult] = useState<PrescriptionAnalysis | null>(null)
 
-  useEffect(() => {
-    if (!selectedFile) {
-      setPreviewUrl(null)
-      return
+  const revokePreviewUrl = useCallback(() => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = null
     }
-    const url = URL.createObjectURL(selectedFile)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [selectedFile])
-
-  const handleFile = useCallback((file: File | undefined) => {
-    if (!file || file.size === 0) return
-    setError(null)
-    setDemoNotice(null)
-    setResult(null)
-    setSelectedFile(file)
+    setPreviewUrl(null)
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current)
+        previewUrlRef.current = null
+      }
+    }
+  }, [])
+
+  const handleFile = useCallback(
+    (file: File | undefined) => {
+      if (!file || file.size === 0) return
+      revokePreviewUrl()
+      setError(null)
+      setDemoNotice(null)
+      setResult(null)
+      const url = URL.createObjectURL(file)
+      previewUrlRef.current = url
+      setPreviewUrl(url)
+      setSelectedFile(file)
+    },
+    [revokePreviewUrl],
+  )
+
   const handleClear = () => {
+    revokePreviewUrl()
     setSelectedFile(null)
     setResult(null)
     setError(null)
@@ -235,7 +251,7 @@ export default function PrescriptionsPage() {
                 )}
               </CardContent>
               <CardFooter className="flex flex-col gap-2 sm:flex-row">
-                <Button className="w-full bg-green-600 text-white hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600" asChild>
+                <Button className="w-full bg-green-600 text-white hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600">
                   <Link href="/patient/chat">Preguntar al asistente sobre esta receta</Link>
                 </Button>
                 <Button variant="outline" className="w-full" type="button" onClick={handleClear}>

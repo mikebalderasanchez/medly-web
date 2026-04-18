@@ -20,6 +20,7 @@ import {
   Plus,
   Trash2,
   Download,
+  Mail,
 } from "lucide-react"
 import type { ConsultationExtraction, ConsultationPatientGender } from "@/lib/consultation-extraction"
 import { downloadPrescriptionPdf } from "@/lib/download-prescription-pdf"
@@ -229,7 +230,9 @@ function NewConsultationPageInner() {
   const [consentMode, setConsentMode] = useState<ConsentDialogMode>("save")
   const [sessionConsent, setSessionConsent] = useState<SaveConsentPayload | null>(null)
   const [isStartingRecording, setIsStartingRecording] = useState(false)
-  const [lastSavedPatientId, setLastSavedPatientId] = useState<string | null>(null)
+  /** Solo tras guardar desde la barra superior: si falta correo o falla el envío, se muestra el panel manual. */
+  const [postVisitPanelPatientId, setPostVisitPanelPatientId] = useState<string | null>(null)
+  const saveOriginRef = useRef<"card" | "toolbar">("toolbar")
   const [rxPdfError, setRxPdfError] = useState<string | null>(null)
 
   const [rxLines, setRxLines] = useState<PrescriptionLine[]>(() => [emptyRxLine()])
@@ -325,7 +328,7 @@ function NewConsultationPageInner() {
     setRxPdfError(null)
     setClinicalNotes("")
     setSessionConsent(null)
-    setLastSavedPatientId(null)
+    setPostVisitPanelPatientId(null)
   }
 
   const startRecording = async (): Promise<boolean> => {
@@ -586,9 +589,69 @@ function NewConsultationPageInner() {
         }
         setConsentOpen(false)
         setSessionConsent(null)
-        setSavedFlash("Consulta guardada en MongoDB.")
-        const pid = data.consultation?.patientId
-        setLastSavedPatientId(typeof pid === "string" && pid.trim() ? pid.trim() : null)
+
+        const rawPid = data.consultation?.patientId
+        const pid = typeof rawPid === "string" && rawPid.trim() ? rawPid.trim() : null
+        const origin = saveOriginRef.current
+
+        if (origin === "card") {
+          setPostVisitPanelPatientId(null)
+          setSavedFlash(pid ? "Consulta guardada en el expediente." : "Consulta guardada.")
+          return
+        }
+
+        setPostVisitPanelPatientId(null)
+        if (!pid) {
+          setSavedFlash(
+            "Consulta guardada. Para enviar el acceso por correo, vincula un paciente al expediente antes de usar la acción superior.",
+          )
+          return
+        }
+
+        const pr = await fetch(`/api/clinic/patients/${encodeURIComponent(pid)}`)
+        const pd = (await pr.json().catch(() => ({}))) as { patient?: { email?: string } }
+        if (!pr.ok) {
+          setSavedFlash(
+            "Consulta guardada. No se pudo leer el expediente para el envío automático; usa el panel inferior si quieres mandar el correo.",
+          )
+          setPostVisitPanelPatientId(pid)
+          return
+        }
+        const em = pd.patient?.email?.trim() ?? ""
+        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)
+
+        if (!emailValid) {
+          setSavedFlash(
+            "Consulta guardada. El expediente no tiene correo: indícalo abajo para enviar la invitación al portal.",
+          )
+          setPostVisitPanelPatientId(pid)
+          return
+        }
+
+        const ir = await fetch(`/api/clinic/patients/${encodeURIComponent(pid)}/portal-invite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        })
+        const inv = (await ir.json().catch(() => ({}))) as { error?: string; message?: string }
+
+        if (!ir.ok) {
+          setSaveError(
+            typeof inv.error === "string"
+              ? `${inv.error} La consulta ya está guardada; puedes reintentar el envío abajo.`
+              : "No se pudo enviar el correo. La consulta ya está guardada; reintenta desde el panel inferior.",
+          )
+          setPostVisitPanelPatientId(pid)
+          setSavedFlash("Consulta guardada en el expediente.")
+          return
+        }
+
+        setPostVisitPanelPatientId(null)
+        setSavedFlash(
+          typeof inv.message === "string"
+            ? `Consulta guardada. ${inv.message}`
+            : "Consulta guardada y correo de acceso al portal enviado.",
+        )
       } catch {
         setSaveError("Error de red al guardar.")
       } finally {
@@ -606,6 +669,33 @@ function NewConsultationPageInner() {
       rxGeneralNotes,
     ]
   )
+
+  const canSaveToRecord = Boolean(structured) || hasRecetaDraft
+
+  const beginSaveFlow = useCallback(() => {
+    setSaveError(null)
+    setSavedFlash(null)
+    if (sessionConsent) {
+      void saveWithConsent(sessionConsent)
+    } else {
+      setConsentMode("save")
+      setConsentOpen(true)
+    }
+  }, [sessionConsent, saveWithConsent])
+
+  const triggerSaveFromToolbar = useCallback(() => {
+    saveOriginRef.current = "toolbar"
+    beginSaveFlow()
+  }, [beginSaveFlow])
+
+  const triggerSaveFromCard = useCallback(() => {
+    saveOriginRef.current = "card"
+    beginSaveFlow()
+  }, [beginSaveFlow])
+
+  const scrollToReceta = () => {
+    document.getElementById("receta-consulta")?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
 
   const handleConsentConfirmed = async (p: SaveConsentPayload) => {
     if (consentMode === "recording") {
@@ -638,6 +728,49 @@ function NewConsultationPageInner() {
         </p>
       </div>
 
+      <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 -mx-4 flex flex-col gap-3 border-b px-4 py-3 shadow-sm backdrop-blur-md sm:flex-row sm:items-center sm:justify-between md:-mx-8 md:px-8">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-foreground text-sm font-medium">Guardar y enviar al paciente</p>
+          <p className="text-muted-foreground text-xs leading-snug sm:text-sm">
+            {canSaveToRecord
+              ? hasRecetaDraft
+                ? "Guarda la consulta (notas, resumen y receta) y envía por correo la invitación al portal si el expediente tiene correo; si no, podrás indicarlo después."
+                : "Guarda la consulta y envía la invitación por correo; completa la receta más abajo si aplica. El botón del resumen solo archiva sin correo."
+              : "Procesa el audio o escribe al menos diagnóstico, medicamentos o notas en la receta para poder guardar."}
+          </p>
+          {structured && !hasRecetaDraft ? (
+            <Button type="button" variant="link" className="h-auto p-0 text-xs font-medium sm:text-sm" onClick={scrollToReceta}>
+              Ir a receta médica
+            </Button>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Button variant="outline" size="sm" disabled={!canDiscardDraft} type="button" onClick={resetAll}>
+            Descartar
+          </Button>
+          <Button
+            size="sm"
+            className="gap-2"
+            disabled={!canSaveToRecord || isSaving || isStartingRecording}
+            type="button"
+            onClick={triggerSaveFromToolbar}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                Guardando…
+              </>
+            ) : (
+              <>
+                <Mail className="h-4 w-4 shrink-0" />
+                <span className="sm:hidden">Enviar</span>
+                <span className="hidden sm:inline">Guardar y enviar correo</span>
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
       {processingError ? (
         <p className="text-sm text-destructive" role="alert">
           {processingError}
@@ -651,8 +784,8 @@ function NewConsultationPageInner() {
         </p>
       ) : null}
 
-      {lastSavedPatientId ? (
-        <PostVisitPortalInvitePanel patientId={lastSavedPatientId} />
+      {postVisitPanelPatientId ? (
+        <PostVisitPortalInvitePanel patientId={postVisitPanelPatientId} />
       ) : null}
 
       <input
@@ -914,26 +1047,25 @@ function NewConsultationPageInner() {
               Descartar
             </Button>
             <Button
-              disabled={(!structured && !hasRecetaDraft) || isSaving || isStartingRecording}
+              disabled={!canSaveToRecord || isSaving || isStartingRecording}
               type="button"
-              onClick={() => {
-                setSaveError(null)
-                setSavedFlash(null)
-                if (sessionConsent) {
-                  void saveWithConsent(sessionConsent)
-                } else {
-                  setConsentMode("save")
-                  setConsentOpen(true)
-                }
-              }}
+              className="gap-2"
+              onClick={triggerSaveFromCard}
             >
-              Guardar en Expediente
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Guardando…
+                </>
+              ) : (
+                "Guardar en expediente"
+              )}
             </Button>
           </CardFooter>
         </Card>
       </div>
 
-      <div className="mt-5 border-t pt-7">
+      <div className="mt-5 scroll-mt-28 border-t pt-7" id="receta-consulta">
         <div className="mb-6">
           <h2 className="text-xl font-semibold tracking-tight">Receta médica</h2>
           {rxPdfError ? (

@@ -12,7 +12,7 @@ export async function GET(req: Request) {
 
     const user = await findClinicAuthUserById(auth.userId)
     if (!user) {
-      return NextResponse.json({ user: null as const }, { status: 404 })
+      return NextResponse.json({ user: null }, { status: 404 })
     }
 
     const role = effectiveClinicRole(user)

@@ -10,6 +10,7 @@ import type { PrescriptionAnalysis } from "@/lib/prescription-extraction"
 import { prescriptionAnalysisToPlainBody } from "@/lib/clinic-prescription-bridge"
 import { downloadPrescriptionPdf } from "@/lib/download-prescription-pdf"
 import { readStoredClinicPrescriptionContext } from "@/lib/patient-clinic-prescription-context"
+import { PATIENT_STORAGE_SYNC_EVENT } from "@/lib/patient-session-hydrate"
 import { readStoredExpedienteContext } from "@/lib/patient-expediente"
 import { writeStoredPrescriptionContext } from "@/lib/patient-prescription-context"
 import { getOrCreatePatientDeviceId } from "@/lib/patient-device-id"
@@ -25,7 +26,13 @@ export default function PrescriptionsPage() {
   const [error, setError] = useState<string | null>(null)
   const [demoNotice, setDemoNotice] = useState<string | null>(null)
   const [result, setResult] = useState<PrescriptionAnalysis | null>(null)
-  const [clinicRx] = useState(() => readStoredClinicPrescriptionContext())
+  const [clinicRx, setClinicRx] = useState(() => readStoredClinicPrescriptionContext())
+
+  useEffect(() => {
+    const onSync = () => setClinicRx(readStoredClinicPrescriptionContext())
+    window.addEventListener(PATIENT_STORAGE_SYNC_EVENT, onSync)
+    return () => window.removeEventListener(PATIENT_STORAGE_SYNC_EVENT, onSync)
+  }, [])
 
   const revokePreviewUrl = useCallback(() => {
     if (previewUrlRef.current) {

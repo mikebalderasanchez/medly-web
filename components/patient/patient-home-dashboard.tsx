@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { startTransition, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { Activity, Camera, CheckCircle2, Clock, MessageCircle, Pill, Stethoscope } from "lucide-react"
 
@@ -10,6 +10,7 @@ import { readStoredExpedienteContext } from "@/lib/patient-expediente"
 import { readStoredClinicPatientId } from "@/lib/patient-clinic-link"
 import { readStoredClinicPrescriptionContext } from "@/lib/patient-clinic-prescription-context"
 import { getOrCreatePatientDeviceId } from "@/lib/patient-device-id"
+import { PATIENT_STORAGE_SYNC_EVENT } from "@/lib/patient-session-hydrate"
 
 type ConsultationRow = {
   id: string
@@ -31,36 +32,47 @@ function shouldFetchConsultations(): boolean {
 }
 
 export function PatientHomeDashboard() {
-  const [expediente] = useState(() => readStoredExpedienteContext())
-  const [linkedClinic] = useState(() => Boolean(readStoredClinicPatientId()))
-  const [hasClinicRx] = useState(() => Boolean(readStoredClinicPrescriptionContext()))
+  const [expediente, setExpediente] = useState(() => readStoredExpedienteContext())
+  const [linkedClinic, setLinkedClinic] = useState(() => Boolean(readStoredClinicPatientId()))
+  const [hasClinicRx, setHasClinicRx] = useState(() => Boolean(readStoredClinicPrescriptionContext()))
   const [consultations, setConsultations] = useState<ConsultationRow[]>([])
   const [consultationsLoaded, setConsultationsLoaded] = useState(() => !shouldFetchConsultations())
 
-  useEffect(() => {
+  const fetchConsultations = useCallback(async () => {
     if (!shouldFetchConsultations()) return
-
     const deviceId = getOrCreatePatientDeviceId()
     if (!deviceId) return
-
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await fetch(`/api/patient/consultations?deviceId=${encodeURIComponent(deviceId)}`)
-        const data = (await res.json()) as { consultations?: ConsultationRow[] }
-        if (!cancelled && Array.isArray(data.consultations)) {
-          setConsultations(data.consultations)
-        }
-      } catch {
-        /* ignore */
-      } finally {
-        if (!cancelled) setConsultationsLoaded(true)
+    try {
+      const res = await fetch(`/api/patient/consultations?deviceId=${encodeURIComponent(deviceId)}`)
+      const data = (await res.json()) as { consultations?: ConsultationRow[] }
+      if (Array.isArray(data.consultations)) {
+        setConsultations(data.consultations)
       }
-    })()
-    return () => {
-      cancelled = true
+    } catch {
+      /* ignore */
+    } finally {
+      setConsultationsLoaded(true)
     }
   }, [])
+
+  useEffect(() => {
+    startTransition(() => {
+      void fetchConsultations()
+    })
+  }, [fetchConsultations])
+
+  useEffect(() => {
+    const onSync = () => {
+      setExpediente(readStoredExpedienteContext())
+      setLinkedClinic(Boolean(readStoredClinicPatientId()))
+      setHasClinicRx(Boolean(readStoredClinicPrescriptionContext()))
+      startTransition(() => {
+        void fetchConsultations()
+      })
+    }
+    window.addEventListener(PATIENT_STORAGE_SYNC_EVENT, onSync)
+    return () => window.removeEventListener(PATIENT_STORAGE_SYNC_EVENT, onSync)
+  }, [fetchConsultations])
 
   const displayName = expediente?.patientName?.trim() || "Paciente"
   const meds = expediente?.activeMedications ?? []

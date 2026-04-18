@@ -4,6 +4,7 @@ import {
   getClinicConsultationById,
   updateClinicConsultation,
 } from "@/lib/clinic-repository"
+import { parseConsultationPrescriptionBody } from "@/lib/clinic-consultation-prescription"
 import { isAtlasConfigured } from "@/lib/mongodb"
 import { requireClinicSession } from "@/lib/require-clinic-session"
 
@@ -57,6 +58,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (body.patientConsentManualDetail === null) patch.patientConsentManualDetail = null
     else if (typeof body.patientConsentManualDetail === "string") patch.patientConsentManualDetail = body.patientConsentManualDetail
+
+    if ("prescription" in body) {
+      if (body.prescription === null) {
+        patch.prescription = null
+      } else {
+        patch.prescription = parseConsultationPrescriptionBody(body.prescription)
+      }
+    }
 
     if (typeof body.patientConsentAccepted === "boolean" && body.patientConsentAccepted === false) {
       const r =

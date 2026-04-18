@@ -8,6 +8,9 @@ import {
   writeStoredClinicPrescriptionContext,
 } from "@/lib/patient-clinic-prescription-context"
 
+/** Disparado en `window` tras escribir expediente/receta en sessionStorage desde Atlas. */
+export const PATIENT_STORAGE_SYNC_EVENT = "medly:patient-storage-sync"
+
 /**
  * Lee la sesión del dispositivo en Atlas y copia expediente, receta e id de clínica a sessionStorage.
  * Útil al cargar el layout y justo después de vincular el token del correo.
@@ -56,6 +59,10 @@ export async function hydratePatientSessionFromAtlas(): Promise<boolean> {
       ? data.clinicPatientId.trim()
       : null
   )
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(PATIENT_STORAGE_SYNC_EVENT))
+  }
 
   return true
 }

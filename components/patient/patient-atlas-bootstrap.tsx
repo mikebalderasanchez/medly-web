@@ -17,8 +17,14 @@ export function PatientAtlasBootstrap({ children }: { children: ReactNode }) {
         if (alive) setReady(true)
       }
     })()
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return
+      void hydratePatientSessionFromAtlas()
+    }
+    document.addEventListener("visibilitychange", onVis)
     return () => {
       alive = false
+      document.removeEventListener("visibilitychange", onVis)
     }
   }, [])
 

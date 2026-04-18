@@ -320,6 +320,7 @@ export type UpdateClinicConsultationPatch = {
   patientConsentAccepted?: boolean | null
   patientConsentManualReason?: string | null
   patientConsentManualDetail?: string | null
+  prescription?: ClinicConsultationPrescription | null
 }
 
 export async function updateClinicConsultation(
@@ -363,10 +364,24 @@ export async function updateClinicConsultation(
           ? null
           : patch.patientConsentManualDetail.trim() || null
         : existing.patientConsentManualDetail,
+    prescription: patch.prescription !== undefined ? patch.prescription : existing.prescription,
     updatedAt: now,
   }
   await db.collection<ClinicConsultationDoc>(CLINIC_CONSULTATIONS_COLLECTION).replaceOne({ id: id.trim() }, next)
+  if (next.patientId) {
+    await syncClinicPrescriptionDraftFromLatestConsultation(next.patientId)
+  }
   return next
+}
+
+/** Publica en sesiones de paciente el borrador de la última consulta del expediente. */
+export async function syncClinicPrescriptionDraftFromLatestConsultation(clinicPatientId: string): Promise<void> {
+  const pid = clinicPatientId.trim()
+  if (!pid) return
+  const visits = await listConsultationsForPatient(pid)
+  const latest = visits[0] ?? null
+  const draft = clinicPrescriptionToAnalysis(latest?.prescription ?? null)
+  await setClinicPrescriptionDraftForAllSessionsOfPatient(pid, draft)
 }
 
 export async function deleteClinicConsultation(id: string): Promise<boolean> {
@@ -443,10 +458,7 @@ export async function insertClinicConsultation(input: InsertClinicConsultationIn
   await db.collection<ClinicConsultationDoc>(CLINIC_CONSULTATIONS_COLLECTION).insertOne(doc)
   if (doc.patientId) {
     await touchClinicPatientLastVisit(doc.patientId)
-    await setClinicPrescriptionDraftForAllSessionsOfPatient(
-      doc.patientId,
-      clinicPrescriptionToAnalysis(doc.prescription)
-    )
+    await syncClinicPrescriptionDraftFromLatestConsultation(doc.patientId)
   }
   return doc
 }

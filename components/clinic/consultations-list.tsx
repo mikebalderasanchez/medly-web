@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react"
 import Link from "next/link"
-import { FileAudio, FileText, Loader2, Mail, Search, User } from "lucide-react"
+import { FileAudio, FileText, Loader2, Mail, Pill, Search, User } from "lucide-react"
 
 import type { ClinicConsultationListRow } from "@/lib/clinic-types"
 import type { ConsultationExtraction } from "@/lib/consultation-extraction"
@@ -250,6 +250,17 @@ export function ConsultationsList({ initialRows, mongo }: Props) {
                           </Link>
                         </Button>
                       ) : null}
+                      {mongo ? (
+                        <Button variant="ghost" size="icon" title="Editar receta">
+                          <Link href={`/consultations/${encodeURIComponent(consultation.id)}/receta`}>
+                            <Pill className="h-4 w-4 text-muted-foreground" />
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button variant="ghost" size="icon" title="Conecta MongoDB para editar receta" type="button" disabled>
+                          <Pill className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

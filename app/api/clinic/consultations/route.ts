@@ -5,7 +5,7 @@ import {
   listClinicConsultationsFromDb,
 } from "@/lib/clinic-repository"
 import type { ConsultationExtraction } from "@/lib/consultation-extraction"
-import type { ClinicConsultationPrescription } from "@/lib/clinic-types"
+import { parseConsultationPrescriptionBody } from "@/lib/clinic-consultation-prescription"
 import { isAtlasConfigured } from "@/lib/mongodb"
 import { requireClinicSession } from "@/lib/require-clinic-session"
 
@@ -34,30 +34,6 @@ export async function GET(req: Request) {
   }
 }
 
-function parsePrescription(raw: unknown): ClinicConsultationPrescription | null {
-  if (!raw || typeof raw !== "object") return null
-  const o = raw as Record<string, unknown>
-  const diagnosis = o.diagnosis === null ? null : typeof o.diagnosis === "string" ? o.diagnosis : null
-  const generalNotes =
-    o.generalNotes === null ? null : typeof o.generalNotes === "string" ? o.generalNotes : null
-  const previewText = typeof o.previewText === "string" ? o.previewText : ""
-  const linesRaw = Array.isArray(o.lines) ? o.lines : []
-  const lines = linesRaw.map((row) => {
-    if (!row || typeof row !== "object") {
-      return { drug: "", dose: "", route: "", frequency: "", duration: "" }
-    }
-    const r = row as Record<string, unknown>
-    return {
-      drug: typeof r.drug === "string" ? r.drug : "",
-      dose: typeof r.dose === "string" ? r.dose : "",
-      route: typeof r.route === "string" ? r.route : "",
-      frequency: typeof r.frequency === "string" ? r.frequency : "",
-      duration: typeof r.duration === "string" ? r.duration : "",
-    }
-  })
-  return { diagnosis, lines, generalNotes, previewText }
-}
-
 export async function POST(req: Request) {
   try {
     const auth = await requireClinicSession(req)
@@ -84,7 +60,7 @@ export async function POST(req: Request) {
       structured = body.structured as ConsultationExtraction
     }
 
-    const prescription = parsePrescription(body.prescription)
+    const prescription = parseConsultationPrescriptionBody(body.prescription)
     const reasonOverride =
       typeof body.reason === "string" && body.reason.trim() ? body.reason.trim().slice(0, 200) : null
 

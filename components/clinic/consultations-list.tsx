@@ -244,7 +244,7 @@ export function ConsultationsList({ initialRows, mongo }: Props) {
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       {consultation.patientId ? (
-                        <Button variant="ghost" size="icon" title="Expediente del paciente" asChild>
+                        <Button variant="ghost" size="icon" title="Expediente del paciente">
                           <Link href={`/patients/${encodeURIComponent(consultation.patientId)}`}>
                             <User className="h-4 w-4" />
                           </Link>

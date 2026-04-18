@@ -6,7 +6,7 @@ import { Activity, Camera, CheckCircle2, Clock, MessageCircle, Pill, Stethoscope
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { readStoredExpedienteContext, type StoredExpedienteContext } from "@/lib/patient-expediente"
+import { readStoredExpedienteContext } from "@/lib/patient-expediente"
 import { readStoredClinicPatientId } from "@/lib/patient-clinic-link"
 import { readStoredClinicPrescriptionContext } from "@/lib/patient-clinic-prescription-context"
 import { getOrCreatePatientDeviceId } from "@/lib/patient-device-id"
@@ -25,24 +25,23 @@ function formatVisitDate(iso: string): string {
     : iso
 }
 
+function shouldFetchConsultations(): boolean {
+  const deviceId = getOrCreatePatientDeviceId()
+  return Boolean(deviceId?.trim() && readStoredClinicPatientId())
+}
+
 export function PatientHomeDashboard() {
-  const [expediente, setExpediente] = useState<StoredExpedienteContext | null>(null)
-  const [linkedClinic, setLinkedClinic] = useState(false)
+  const [expediente] = useState(() => readStoredExpedienteContext())
+  const [linkedClinic] = useState(() => Boolean(readStoredClinicPatientId()))
+  const [hasClinicRx] = useState(() => Boolean(readStoredClinicPrescriptionContext()))
   const [consultations, setConsultations] = useState<ConsultationRow[]>([])
-  const [consultationsLoaded, setConsultationsLoaded] = useState(false)
-  const [hasClinicRx, setHasClinicRx] = useState(false)
+  const [consultationsLoaded, setConsultationsLoaded] = useState(() => !shouldFetchConsultations())
 
   useEffect(() => {
-    setExpediente(readStoredExpedienteContext())
-    const linked = Boolean(readStoredClinicPatientId())
-    setLinkedClinic(linked)
-    setHasClinicRx(Boolean(readStoredClinicPrescriptionContext()))
+    if (!shouldFetchConsultations()) return
 
     const deviceId = getOrCreatePatientDeviceId()
-    if (!deviceId || !linked) {
-      setConsultationsLoaded(true)
-      return
-    }
+    if (!deviceId) return
 
     let cancelled = false
     void (async () => {
@@ -76,7 +75,7 @@ export function PatientHomeDashboard() {
             : "Resumen de tu sesión en Medly. Si recibiste un código por correo tras una consulta, puedes vincular tu expediente."}
         </p>
         {!linkedClinic ? (
-          <Button variant="outline" size="sm" className="mt-1" asChild>
+          <Button variant="outline" size="sm" className="mt-1">
             <Link href="/patient/vincular">Vincular con código del correo</Link>
           </Button>
         ) : null}
@@ -106,7 +105,7 @@ export function PatientHomeDashboard() {
                 </p>
               </div>
             </div>
-            <Button size="sm" variant="secondary" asChild>
+            <Button size="sm" variant="secondary">
               <Link href="/patient/prescriptions">Ver en Recetas</Link>
             </Button>
           </CardContent>

@@ -7,7 +7,7 @@ export const runtime = "nodejs"
 export async function GET(req: Request) {
   const session = await resolveClinicSession(req)
   if (!session) {
-    return NextResponse.json({ user: null as const })
+    return NextResponse.json({ user: null })
   }
   return NextResponse.json({
     user: {

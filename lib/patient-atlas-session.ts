@@ -8,6 +8,10 @@ export type PatientDeviceSessionDoc = {
   deviceId: string
   expediente: PatientExpedienteRecord | null
   prescriptionAnalysis: PrescriptionAnalysis | null
+  /** Borrador de receta de la última consulta guardada por el médico. */
+  clinicPrescriptionDraft?: PrescriptionAnalysis | null
+  /** Presente cuando el paciente vinculó invitación desde el consultorio. */
+  clinicPatientId?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -34,6 +38,8 @@ export async function getPatientSessionByDeviceId(deviceIdRaw: string): Promise<
 export type PatientSessionPatch = {
   expediente?: PatientExpedienteRecord | null
   prescriptionAnalysis?: PrescriptionAnalysis | null
+  clinicPatientId?: string | null
+  clinicPrescriptionDraft?: PrescriptionAnalysis | null
 }
 
 export async function upsertPatientSession(deviceIdRaw: string, patch: PatientSessionPatch): Promise<void> {
@@ -51,6 +57,8 @@ export async function upsertPatientSession(deviceIdRaw: string, patch: PatientSe
   const $set: Record<string, unknown> = { deviceId, updatedAt: now }
   if ("expediente" in patch) $set.expediente = patch.expediente ?? null
   if ("prescriptionAnalysis" in patch) $set.prescriptionAnalysis = patch.prescriptionAnalysis ?? null
+  if ("clinicPatientId" in patch) $set.clinicPatientId = patch.clinicPatientId?.trim() || null
+  if ("clinicPrescriptionDraft" in patch) $set.clinicPrescriptionDraft = patch.clinicPrescriptionDraft ?? null
 
   await col.updateOne(
     { deviceId },
@@ -59,5 +67,20 @@ export async function upsertPatientSession(deviceIdRaw: string, patch: PatientSe
       $setOnInsert: { createdAt: now },
     },
     { upsert: true }
+  )
+}
+
+/** Actualiza el borrador de receta del consultorio en todas las sesiones de dispositivo ya vinculadas a ese expediente. */
+export async function setClinicPrescriptionDraftForAllSessionsOfPatient(
+  clinicPatientId: string,
+  draft: PrescriptionAnalysis | null
+): Promise<void> {
+  if (!isAtlasConfigured()) return
+  const db = await getMedlyDb()
+  if (!db) return
+  const now = new Date()
+  await db.collection<PatientDeviceSessionDoc>(PATIENT_SESSIONS_COLLECTION).updateMany(
+    { clinicPatientId: clinicPatientId.trim() },
+    { $set: { clinicPrescriptionDraft: draft, updatedAt: now } }
   )
 }

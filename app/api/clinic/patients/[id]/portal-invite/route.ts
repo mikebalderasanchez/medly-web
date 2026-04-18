@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server"
 
-import { getClinicPatientById } from "@/lib/clinic-repository"
+import {
+  clinicPrescriptionToAnalysis,
+  prescriptionAnalysisToEmailHtml,
+  prescriptionAnalysisToPlainBody,
+} from "@/lib/clinic-prescription-bridge"
+import { getClinicPatientById, listConsultationsForPatient } from "@/lib/clinic-repository"
+import { buildPrescriptionPdfBytes } from "@/lib/prescription-pdf-core"
+import { setClinicPrescriptionDraftForAllSessionsOfPatient } from "@/lib/patient-atlas-session"
 import {
   createPatientPortalInvite,
   ensurePatientPortalInviteIndexes,
@@ -66,11 +73,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const claimUrl = `${base}/patient/vincular?pid=${encodeURIComponent(created.publicId)}&t=${encodeURIComponent(created.rawToken)}`
     const plainLine = `${created.publicId}:${created.rawToken}`
 
+    const visits = await listConsultationsForPatient(patient.id)
+    const latest = visits[0] ?? null
+    const rxAnalysis = clinicPrescriptionToAnalysis(latest?.prescription ?? null)
+    await setClinicPrescriptionDraftForAllSessionsOfPatient(patient.id, rxAnalysis)
+
+    let prescriptionHtmlAppendix: string | null = null
+    let prescriptionPdfBase64: string | null = null
+    let prescriptionPdfFilename: string | null = null
+    if (rxAnalysis) {
+      prescriptionHtmlAppendix = prescriptionAnalysisToEmailHtml(rxAnalysis, patient.name)
+      const body = prescriptionAnalysisToPlainBody(rxAnalysis)
+      const bytes = buildPrescriptionPdfBytes({ body, patientLabel: patient.name })
+      prescriptionPdfBase64 = Buffer.from(bytes).toString("base64")
+      prescriptionPdfFilename = `receta-medly-${patient.name.replace(/\s+/g, "-").replace(/[^\w.-]/g, "").slice(0, 28)}.pdf`
+    }
+
     const mail = await sendPatientPortalInviteEmail({
       to: toEmailRaw,
       patientName: patient.name,
       claimUrl,
       plainLine,
+      prescriptionHtmlAppendix,
+      prescriptionPdfBase64,
+      prescriptionPdfFilename,
     })
 
     if (!mail.sent && process.env.NODE_ENV === "development") {
@@ -84,7 +110,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       claimUrl: mail.sent ? undefined : claimUrl,
       plainLine: mail.sent ? undefined : plainLine,
       message: mail.sent
-        ? "Se envió el correo al paciente."
+        ? rxAnalysis
+          ? "Se envió el correo con acceso al portal, resumen de receta en el mensaje y PDF adjunto."
+          : "Se envió el correo al paciente."
         : "No hay RESEND_API_KEY / EMAIL_FROM configurados: copia el enlace o la línea de acceso y compártelos por un canal seguro.",
     })
   } catch (e) {

@@ -1,4 +1,4 @@
-import type { ClinicPatientDoc } from "@/lib/clinic-types"
+import type { ClinicConsultationDoc, ClinicPatientDoc } from "@/lib/clinic-types"
 import type { PatientExpedienteRecord } from "@/lib/patient-expediente"
 
 export function clinicPatientToExpediente(p: ClinicPatientDoc): PatientExpedienteRecord {
@@ -11,4 +11,23 @@ export function clinicPatientToExpediente(p: ClinicPatientDoc): PatientExpedient
     chronicConditions: p.chronicConditions?.trim() || null,
     activeMedications: [],
   }
+}
+
+/** Si la última consulta tiene líneas de receta, las usa como medicación activa sugerida para el portal. */
+export function mergeLatestConsultationRxIntoExpediente(
+  base: PatientExpedienteRecord,
+  visit: ClinicConsultationDoc | null
+): PatientExpedienteRecord {
+  const lines = visit?.prescription?.lines
+  if (!lines?.length) return base
+  const meds = lines
+    .filter((l) => l.drug.trim())
+    .map((l) => ({
+      name: l.drug.trim(),
+      instructions:
+        [l.dose, l.route, l.frequency, l.duration].filter((x) => typeof x === "string" && x.trim()).join(" · ") ||
+        null,
+    }))
+  if (!meds.length) return base
+  return { ...base, activeMedications: meds }
 }

@@ -1,4 +1,5 @@
 import type { PrescriptionAnalysis } from "@/lib/prescription-extraction"
+import type { ClinicConsultationDoc } from "@/lib/clinic-types"
 import type { PatientExpedienteRecord } from "@/lib/patient-expediente"
 
 export function parseExpedienteRecord(raw: unknown): PatientExpedienteRecord | null {
@@ -66,6 +67,22 @@ export function hasPatientChatContext(
       (expediente.activeMedications?.length ?? 0) > 0)
 
   return Boolean(rx || ex)
+}
+
+export function formatRecentConsultationsForPrompt(visits: ClinicConsultationDoc[], max = 5): string {
+  const slice = visits.slice(0, max)
+  if (!slice.length) return ""
+  const lines: string[] = [
+    "Consultas recientes registradas por el consultorio (solo referencia; no sustituyen indicación médica directa):",
+  ]
+  for (const v of slice) {
+    const d = v.createdAt instanceof Date ? v.createdAt : new Date(String(v.createdAt))
+    const when = Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : "?"
+    lines.push(`- ${when} · ${v.reason} · ${v.status}`)
+    const sx = v.structured?.describedSymptoms?.filter(Boolean).slice(0, 4)
+    if (sx?.length) lines.push(`  Síntomas: ${sx.join("; ")}`)
+  }
+  return lines.join("\n")
 }
 
 export function formatExpedienteForPrompt(expediente: PatientExpedienteRecord): string {

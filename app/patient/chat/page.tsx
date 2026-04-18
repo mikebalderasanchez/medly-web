@@ -13,6 +13,7 @@ import {
   readStoredExpedienteContext,
   type PatientExpedienteRecord,
 } from "@/lib/patient-expediente"
+import { readStoredClinicPatientId } from "@/lib/patient-clinic-link"
 import { hasPatientChatContext } from "@/lib/patient-chat-context"
 import { getOrCreatePatientDeviceId } from "@/lib/patient-device-id"
 import { AssistantMessageContent } from "@/components/patient/assistant-message-content"
@@ -43,18 +44,21 @@ function buildWelcomeBlocks(
   }
 
   if (expediente) {
+    const linked = Boolean(readStoredClinicPatientId())
     return [
       { type: "heading", text: `Hola, ${expediente.patientName}`, level: 2 },
       {
         type: "paragraph",
-        text: "Tengo cargado tu **expediente demo** en esta sesión (alergias, antecedentes y medicación activa). Pregunta con el detalle que necesites.",
+        text: linked
+          ? "Tengo cargado tu **expediente del consultorio** (vinculado con el código del correo), con alergias, antecedentes y la medicación que consta en tu expediente o en la última consulta. También puedo usar el **historial de visitas** que el médico haya guardado."
+          : "Tengo cargado tu expediente en esta sesión (alergias, antecedentes y medicación si constan). Pregunta con el detalle que necesites.",
       },
       { type: "divider" },
       {
         type: "callout",
         variant: "info",
         title: "¿Quieres aún más precisión?",
-        text: "Si subes una receta reciente en la pestaña Recetas, podré cruzar posología exacta con lo que ves en papel.",
+        text: "Si subes una receta reciente en **Recetas**, podré cruzar posología exacta con lo que ves en papel.",
       },
     ]
   }
@@ -64,13 +68,13 @@ function buildWelcomeBlocks(
       type: "callout",
       variant: "warning",
       title: "Falta expediente o receta",
-      text: "Para activar el asistente necesitas contexto: visita **Inicio** (expediente demo) o analiza una receta en **Recetas**.",
+      text: "Para activar el asistente: **vincula el código** del correo del consultorio (página Vincular), o abre **Inicio** / **Recetas** para cargar contexto.",
     },
     {
       type: "bullet_list",
       items: [
-        "El expediente se guarda en esta sesión del navegador.",
-        "La receta se usa cuando pulsas **Leer receta** tras subir la foto.",
+        "Tras una consulta, el consultorio puede enviarte un enlace o código para enlazar tu expediente.",
+        "El expediente y las consultas guardadas por tu médico se usan solo para orientarte; no sustituyen la consulta presencial.",
       ],
     },
   ]
@@ -209,7 +213,7 @@ export default function PatientChat() {
         {expedienteContext ? (
           <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground">
             <IdCard className="h-3.5 w-3.5" aria-hidden />
-            Expediente
+            {readStoredClinicPatientId() ? "Expediente (consultorio)" : "Expediente"}
           </span>
         ) : (
           <span className="text-[11px]">Sin expediente</span>

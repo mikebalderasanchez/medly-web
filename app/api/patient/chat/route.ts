@@ -3,11 +3,13 @@ import type { PrescriptionAnalysis } from "@/lib/prescription-extraction"
 import type { PatientExpedienteRecord } from "@/lib/patient-expediente"
 import {
   formatExpedienteForPrompt,
+  formatRecentConsultationsForPrompt,
   hasPatientChatContext,
   parseExpedienteRecord,
   parsePrescriptionRecord,
 } from "@/lib/patient-chat-context"
 import { getPatientSessionByDeviceId } from "@/lib/patient-atlas-session"
+import { listConsultationsForPatient } from "@/lib/clinic-repository"
 import {
   assistantReplyFromPlainText,
   buildPatientAssistantJsonPrompt,
@@ -30,8 +32,8 @@ const BLOCKED_REPLY: AssistantStructuredReply = {
     {
       type: "bullet_list",
       items: [
-        "Abre **Inicio** en la app de paciente (se sincroniza un expediente demo en este entorno).",
-        "O ve a **Recetas**, sube una foto y pulsa **Leer receta**.",
+        "Si recibiste un **correo del consultorio**, abre **Vincular acceso** y pega el código para cargar tu expediente.",
+        "O abre **Inicio** (expediente de ejemplo en este navegador) o **Recetas** para analizar una foto de receta.",
       ],
     },
     { type: "paragraph", text: "Cuando veas el chip de contexto arriba del chat, podrás escribir tu pregunta con seguridad." },
@@ -40,7 +42,8 @@ const BLOCKED_REPLY: AssistantStructuredReply = {
 
 function buildSystemInstruction(
   prescription: PrescriptionAnalysis | null,
-  expediente: PatientExpedienteRecord | null
+  expediente: PatientExpedienteRecord | null,
+  consultationsContext: string
 ): string {
   const base = `
 Eres el asistente virtual de Medly para pacientes. Responde en español, con tono claro y empático.
@@ -71,6 +74,10 @@ ${buildPatientAssistantJsonPrompt()}
       .filter(Boolean)
       .join("\n\n")
     chunks.push(`\nContexto de receta del usuario (no contradigas al médico):\n${rxLines}`)
+  }
+
+  if (consultationsContext.trim()) {
+    chunks.push(`\n${consultationsContext.trim()}`)
   }
 
   return chunks.join("\n").trim()
@@ -214,14 +221,20 @@ export async function POST(req: Request) {
     let prescriptionContext = parsePrescriptionRecord(body.prescriptionContext)
     let expedienteContext = parseExpedienteRecord(body.expedienteContext)
 
+    let consultationsContext = ""
     if (deviceId) {
       const stored = await getPatientSessionByDeviceId(deviceId)
       if (stored) {
-        if (!prescriptionContext && stored.prescriptionAnalysis) {
-          prescriptionContext = stored.prescriptionAnalysis
+        if (!prescriptionContext) {
+          prescriptionContext = stored.prescriptionAnalysis ?? stored.clinicPrescriptionDraft ?? null
         }
         if (!expedienteContext && stored.expediente) {
           expedienteContext = stored.expediente
+        }
+        const pid = stored.clinicPatientId?.trim()
+        if (pid) {
+          const visits = await listConsultationsForPatient(pid)
+          consultationsContext = formatRecentConsultationsForPrompt(visits, 6)
         }
       }
     }
@@ -249,7 +262,7 @@ export async function POST(req: Request) {
       })
     }
 
-    const systemInstruction = buildSystemInstruction(prescriptionContext, expedienteContext)
+    const systemInstruction = buildSystemInstruction(prescriptionContext, expedienteContext, consultationsContext)
     const geminiKey = process.env.GEMINI_API_KEY
     const lastUser = messages.filter((m) => m.role === "user").pop()?.content ?? ""
 

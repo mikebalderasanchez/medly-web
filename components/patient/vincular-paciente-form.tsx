@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getOrCreatePatientDeviceId } from "@/lib/patient-device-id"
+import { hydratePatientSessionFromAtlas } from "@/lib/patient-session-hydrate"
 
 export function VincularPacienteForm() {
   const router = useRouter()
@@ -42,6 +43,7 @@ export function VincularPacienteForm() {
         return
       }
       setDone(typeof data.patientName === "string" ? `Listo: expediente de ${data.patientName}.` : "Acceso vinculado.")
+      await hydratePatientSessionFromAtlas()
       router.replace("/patient")
       router.refresh()
     } catch {

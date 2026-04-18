@@ -5,8 +5,12 @@ import Link from "next/link"
 import NextImage from "next/image"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { UploadCloud, Camera, ImagePlus, X, Loader2, CheckCircle2 } from "lucide-react"
+import { UploadCloud, Camera, ImagePlus, X, Loader2, CheckCircle2, Stethoscope, Download } from "lucide-react"
 import type { PrescriptionAnalysis } from "@/lib/prescription-extraction"
+import { prescriptionAnalysisToPlainBody } from "@/lib/clinic-prescription-bridge"
+import { downloadPrescriptionPdf } from "@/lib/download-prescription-pdf"
+import { readStoredClinicPrescriptionContext } from "@/lib/patient-clinic-prescription-context"
+import { readStoredExpedienteContext } from "@/lib/patient-expediente"
 import { writeStoredPrescriptionContext } from "@/lib/patient-prescription-context"
 import { getOrCreatePatientDeviceId } from "@/lib/patient-device-id"
 
@@ -21,6 +25,7 @@ export default function PrescriptionsPage() {
   const [error, setError] = useState<string | null>(null)
   const [demoNotice, setDemoNotice] = useState<string | null>(null)
   const [result, setResult] = useState<PrescriptionAnalysis | null>(null)
+  const [clinicRx] = useState(() => readStoredClinicPrescriptionContext())
 
   const revokePreviewUrl = useCallback(() => {
     if (previewUrlRef.current) {
@@ -121,6 +126,62 @@ export default function PrescriptionsPage() {
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
+      ) : null}
+
+      {clinicRx ? (
+        <Card className="border-primary/25 bg-primary/[0.06] shadow-sm">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <Stethoscope className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Receta del consultorio</CardTitle>
+            </div>
+            <CardDescription>
+              Borrador guardado por tu médico en la última consulta. También te lo enviamos por correo al vincular el
+              acceso.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {clinicRx.summary ? (
+              <p className="text-sm text-muted-foreground leading-relaxed">{clinicRx.summary}</p>
+            ) : null}
+            {clinicRx.medications.length ? (
+              <ul className="space-y-2">
+                {clinicRx.medications.map((m, i) => (
+                  <li
+                    key={`${m.name}-${i}`}
+                    className="rounded-lg border border-border/80 bg-card px-3 py-2 text-sm"
+                  >
+                    <span className="font-semibold text-foreground">{m.name}</span>
+                    {m.instructions ? (
+                      <p className="mt-1 text-xs text-muted-foreground">{m.instructions}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">Sin líneas de medicamento en el borrador.</p>
+            )}
+            <Button
+              type="button"
+              variant="secondary"
+              className="gap-2"
+              onClick={() => {
+                const ex = readStoredExpedienteContext()
+                downloadPrescriptionPdf({
+                  body: prescriptionAnalysisToPlainBody({
+                    medications: clinicRx.medications,
+                    summary: clinicRx.summary,
+                  }),
+                  patientLabel: ex?.patientName?.trim() || "Paciente",
+                  fileSlug: "receta-consultorio",
+                })
+              }}
+            >
+              <Download className="h-4 w-4" />
+              Descargar PDF
+            </Button>
+          </CardContent>
+        </Card>
       ) : null}
 
       {!previewUrl ? (

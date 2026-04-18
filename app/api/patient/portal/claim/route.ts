@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 
-import { clinicPatientToExpediente } from "@/lib/clinic-patient-to-expediente"
-import { getClinicPatientById } from "@/lib/clinic-repository"
+import { clinicPrescriptionToAnalysis } from "@/lib/clinic-prescription-bridge"
+import { clinicPatientToExpediente, mergeLatestConsultationRxIntoExpediente } from "@/lib/clinic-patient-to-expediente"
+import { getClinicPatientById, listConsultationsForPatient } from "@/lib/clinic-repository"
 import { isAtlasConfigured } from "@/lib/mongodb"
 import { consumePatientPortalInvite } from "@/lib/patient-portal-invite"
 import { upsertPatientSession } from "@/lib/patient-atlas-session"
@@ -82,8 +83,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Paciente no encontrado." }, { status: 404, headers: corsHeaders })
     }
 
-    const expediente = clinicPatientToExpediente(patient)
-    await upsertPatientSession(deviceId, { expediente })
+    const visits = await listConsultationsForPatient(patient.id)
+    const latest = visits[0] ?? null
+    const expediente = mergeLatestConsultationRxIntoExpediente(clinicPatientToExpediente(patient), latest)
+    const clinicRxDraft = clinicPrescriptionToAnalysis(latest?.prescription ?? null)
+    await upsertPatientSession(deviceId, {
+      expediente,
+      clinicPatientId: patient.id,
+      clinicPrescriptionDraft: clinicRxDraft,
+    })
 
     return NextResponse.json(
       {

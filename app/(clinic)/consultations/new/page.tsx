@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { PostVisitPortalInvitePanel } from "@/components/clinic/post-visit-portal-invite-panel"
 
 type PrescriptionLine = {
   id: string
@@ -75,18 +76,22 @@ type SaveConsentPayload = {
   patientConsentManualDetail: string
 }
 
-function SaveConsultationConsentDialog({
+type ConsentDialogMode = "recording" | "save"
+
+function ConsultationConsentDialog({
   open,
   onOpenChange,
-  isSaving,
-  saveError,
-  onSave,
+  mode,
+  isSubmitting,
+  submitError,
+  onConfirm,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  isSaving: boolean
-  saveError: string | null
-  onSave: (p: SaveConsentPayload) => Promise<void>
+  mode: ConsentDialogMode
+  isSubmitting: boolean
+  submitError: string | null
+  onConfirm: (p: SaveConsentPayload) => void | Promise<void>
 }) {
   const [agreed, setAgreed] = useState<boolean | null>(null)
   const [manualReason, setManualReason] = useState("")
@@ -103,12 +108,20 @@ function SaveConsultationConsentDialog({
       setFormError("Describa el motivo o la limitación manifestada por el paciente.")
       return
     }
-    await onSave({
+    await onConfirm({
       patientConsentAccepted: agreed,
       patientConsentManualReason: manualReason.trim(),
       patientConsentManualDetail: manualDetail.trim(),
     })
   }
+
+  const title = mode === "recording" ? "Conformidad antes de grabar" : "Conformidad del paciente"
+  const description =
+    mode === "recording"
+      ? "Confirme con el paciente antes de iniciar la grabación. El audio se usará para transcribir y podrá incorporarse al expediente al guardar. Si no está de acuerdo, deje constancia escrita."
+      : "Confirme con el paciente antes de guardar en el expediente. Si no está de acuerdo, deje constancia escrita."
+  const primaryLabel =
+    mode === "recording" ? "Comenzar grabación" : "Guardar en expediente"
 
   return (
     <Dialog
@@ -123,12 +136,10 @@ function SaveConsultationConsentDialog({
         onOpenChange(next)
       }}
     >
-      <DialogContent className="sm:max-w-lg" showCloseButton={!isSaving}>
+      <DialogContent className="sm:max-w-lg" showCloseButton={!isSubmitting}>
         <DialogHeader>
-          <DialogTitle>Conformidad del paciente</DialogTitle>
-          <DialogDescription>
-            Confirme con el paciente antes de guardar en el expediente. Si no está de acuerdo, deje constancia escrita.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <p className="text-sm font-medium">¿El paciente está de acuerdo con registrar esta información?</p>
@@ -138,7 +149,7 @@ function SaveConsultationConsentDialog({
               variant={agreed === true ? "default" : "outline"}
               size="sm"
               onClick={() => setAgreed(true)}
-              disabled={isSaving}
+              disabled={isSubmitting}
             >
               Sí, conforme
             </Button>
@@ -147,7 +158,7 @@ function SaveConsultationConsentDialog({
               variant={agreed === false ? "default" : "outline"}
               size="sm"
               onClick={() => setAgreed(false)}
-              disabled={isSaving}
+              disabled={isSubmitting}
             >
               No conforme
             </Button>
@@ -160,7 +171,7 @@ function SaveConsultationConsentDialog({
                   id="consent-reason"
                   value={manualReason}
                   onChange={(e) => setManualReason(e.target.value)}
-                  disabled={isSaving}
+                  disabled={isSubmitting}
                   className="min-h-[72px]"
                 />
               </div>
@@ -170,27 +181,27 @@ function SaveConsultationConsentDialog({
                   id="consent-detail"
                   value={manualDetail}
                   onChange={(e) => setManualDetail(e.target.value)}
-                  disabled={isSaving}
+                  disabled={isSubmitting}
                   className="min-h-[72px]"
                 />
               </div>
             </>
           ) : null}
           {formError ? <p className="text-destructive text-sm">{formError}</p> : null}
-          {saveError ? <p className="text-destructive text-sm">{saveError}</p> : null}
+          {submitError ? <p className="text-destructive text-sm">{submitError}</p> : null}
         </div>
         <DialogFooter className="gap-2 sm:justify-end">
-          <Button type="button" variant="outline" disabled={isSaving} onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button type="button" disabled={isSaving} onClick={() => void handleSave()}>
-            {isSaving ? (
+          <Button type="button" disabled={isSubmitting} onClick={() => void handleSave()}>
+            {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Guardando…
+                {mode === "recording" ? "Preparando…" : "Guardando…"}
               </>
             ) : (
-              "Guardar en expediente"
+              primaryLabel
             )}
           </Button>
         </DialogFooter>
@@ -214,7 +225,11 @@ function NewConsultationPageInner() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [clinicalNotes, setClinicalNotes] = useState("")
-  const [saveConsentOpen, setSaveConsentOpen] = useState(false)
+  const [consentOpen, setConsentOpen] = useState(false)
+  const [consentMode, setConsentMode] = useState<ConsentDialogMode>("save")
+  const [sessionConsent, setSessionConsent] = useState<SaveConsentPayload | null>(null)
+  const [isStartingRecording, setIsStartingRecording] = useState(false)
+  const [lastSavedPatientId, setLastSavedPatientId] = useState<string | null>(null)
   const [rxPdfError, setRxPdfError] = useState<string | null>(null)
 
   const [rxLines, setRxLines] = useState<PrescriptionLine[]>(() => [emptyRxLine()])
@@ -309,9 +324,11 @@ function NewConsultationPageInner() {
     setRxDiagnosis("")
     setRxPdfError(null)
     setClinicalNotes("")
+    setSessionConsent(null)
+    setLastSavedPatientId(null)
   }
 
-  const startRecording = async () => {
+  const startRecording = async (): Promise<boolean> => {
     setProcessingError(null)
     setDemoNotice(null)
     setSavedFlash(null)
@@ -319,7 +336,7 @@ function NewConsultationPageInner() {
     setStructured(null)
     if (!navigator.mediaDevices?.getUserMedia) {
       setProcessingError("Tu navegador no permite grabar audio desde el micrófono.")
-      return
+      return false
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -348,9 +365,17 @@ function NewConsultationPageInner() {
       setRecordingSeconds(0)
       setIsRecording(true)
       setHasAudio(false)
+      return true
     } catch {
       setProcessingError("No se pudo acceder al micrófono. Revisa permisos del navegador.")
+      return false
     }
+  }
+
+  const openRecordingConsent = () => {
+    setProcessingError(null)
+    setConsentMode("recording")
+    setConsentOpen(true)
   }
 
   const stopRecording = () => {
@@ -551,13 +576,19 @@ function NewConsultationPageInner() {
               : consent.patientConsentManualDetail || null,
           }),
         })
-        const data = (await res.json()) as { error?: string }
+        const data = (await res.json()) as {
+          error?: string
+          consultation?: { patientId?: string | null }
+        }
         if (!res.ok) {
           setSaveError(typeof data.error === "string" ? data.error : "No se pudo guardar.")
           return
         }
-        setSaveConsentOpen(false)
+        setConsentOpen(false)
+        setSessionConsent(null)
         setSavedFlash("Consulta guardada en MongoDB.")
+        const pid = data.consultation?.patientId
+        setLastSavedPatientId(typeof pid === "string" && pid.trim() ? pid.trim() : null)
       } catch {
         setSaveError("Error de red al guardar.")
       } finally {
@@ -575,6 +606,23 @@ function NewConsultationPageInner() {
       rxGeneralNotes,
     ]
   )
+
+  const handleConsentConfirmed = async (p: SaveConsentPayload) => {
+    if (consentMode === "recording") {
+      setIsStartingRecording(true)
+      try {
+        const ok = await startRecording()
+        if (ok) {
+          setSessionConsent(p)
+          setConsentOpen(false)
+        }
+      } finally {
+        setIsStartingRecording(false)
+      }
+      return
+    }
+    await saveWithConsent(p)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -603,6 +651,10 @@ function NewConsultationPageInner() {
         </p>
       ) : null}
 
+      {lastSavedPatientId ? (
+        <PostVisitPortalInvitePanel patientId={lastSavedPatientId} />
+      ) : null}
+
       <input
         ref={fileInputRef}
         type="file"
@@ -623,7 +675,7 @@ function NewConsultationPageInner() {
                 <div className="flex flex-wrap justify-center gap-4">
                   <Button
                     size="lg"
-                    onClick={startRecording}
+                    onClick={openRecordingConsent}
                     className="gap-2 bg-red-600 text-white hover:bg-red-700"
                   >
                     <Mic className="h-5 w-5" /> Grabar
@@ -862,12 +914,17 @@ function NewConsultationPageInner() {
               Descartar
             </Button>
             <Button
-              disabled={(!structured && !hasRecetaDraft) || isSaving}
+              disabled={(!structured && !hasRecetaDraft) || isSaving || isStartingRecording}
               type="button"
               onClick={() => {
                 setSaveError(null)
                 setSavedFlash(null)
-                setSaveConsentOpen(true)
+                if (sessionConsent) {
+                  void saveWithConsent(sessionConsent)
+                } else {
+                  setConsentMode("save")
+                  setConsentOpen(true)
+                }
               }}
             >
               Guardar en Expediente
@@ -1027,15 +1084,16 @@ function NewConsultationPageInner() {
         </div>
       </div>
 
-      <SaveConsultationConsentDialog
-        open={saveConsentOpen}
+      <ConsultationConsentDialog
+        open={consentOpen}
         onOpenChange={(v) => {
-          if (!v && isSaving) return
-          setSaveConsentOpen(v)
+          if (!v && (isSaving || isStartingRecording)) return
+          setConsentOpen(v)
         }}
-        isSaving={isSaving}
-        saveError={saveError}
-        onSave={saveWithConsent}
+        mode={consentMode}
+        isSubmitting={consentMode === "save" ? isSaving : isStartingRecording}
+        submitError={saveError}
+        onConfirm={handleConsentConfirmed}
       />
     </div>
   )

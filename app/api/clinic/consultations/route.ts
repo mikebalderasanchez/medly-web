@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import {
+  ensureClinicPatientForConsultation,
   insertClinicConsultation,
   listClinicConsultationsFromDb,
 } from "@/lib/clinic-repository"
@@ -131,8 +132,17 @@ export async function POST(req: Request) {
       patientName ??
       (structured?.patient?.name?.trim() ? structured.patient.name.trim() : null)
 
+    let effectivePatientId = patientId
+    if (!effectivePatientId) {
+      const ensured = await ensureClinicPatientForConsultation({
+        structured,
+        resolvedName,
+      })
+      if (ensured) effectivePatientId = ensured
+    }
+
     const doc = await insertClinicConsultation({
-      patientId,
+      patientId: effectivePatientId,
       patientName: resolvedName,
       transcription,
       structured,

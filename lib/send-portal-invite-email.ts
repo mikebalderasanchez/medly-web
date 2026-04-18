@@ -15,11 +15,19 @@ export async function sendPatientPortalInviteEmail(input: {
   patientName: string
   claimUrl: string
   plainLine: string
+  /** HTML adicional (p. ej. receta del consultorio). */
+  prescriptionHtmlAppendix?: string | null
+  /** PDF en base64 (sin data: prefix) para adjuntar la receta. */
+  prescriptionPdfBase64?: string | null
+  prescriptionPdfFilename?: string | null
 }): Promise<SendInviteEmailResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim()
   const from = process.env.EMAIL_FROM?.trim() || "Medly <onboarding@resend.dev>"
 
-  const subject = "Tu acceso al portal de paciente Medly"
+  const hasRx = Boolean(input.prescriptionHtmlAppendix?.trim() || input.prescriptionPdfBase64?.trim())
+  const subject = hasRx
+    ? "Tu acceso a Medly y receta del consultorio"
+    : "Tu acceso al portal de paciente Medly"
   const html = `
   <p>Hola${input.patientName ? `, <strong>${escapeHtml(input.patientName)}</strong>` : ""},</p>
   <p>Tu equipo médico compartió contigo el acceso al portal de paciente de <strong>Medly</strong> tras tu consulta.</p>
@@ -28,7 +36,18 @@ export async function sendPatientPortalInviteEmail(input: {
   <code style="word-break:break-all">${escapeHtml(input.claimUrl)}</code></p>
   <p style="font-size:12px;color:#555">Código para la app (una sola línea):<br/><code style="word-break:break-all">${escapeHtml(input.plainLine)}</code></p>
   <p style="font-size:12px;color:#888">Este enlace caduca en 14 días y solo puede usarse una vez.</p>
+  ${input.prescriptionHtmlAppendix?.trim() ? `<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />${input.prescriptionHtmlAppendix.trim()}` : ""}
 `.trim()
+
+  const attachments =
+    input.prescriptionPdfBase64 && input.prescriptionPdfBase64.trim()
+      ? [
+          {
+            filename: (input.prescriptionPdfFilename?.trim() || "receta-medly.pdf").replace(/[^\w.-]+/g, "-"),
+            content: input.prescriptionPdfBase64.trim(),
+          },
+        ]
+      : undefined
 
   if (!apiKey) {
     return {
@@ -50,6 +69,7 @@ export async function sendPatientPortalInviteEmail(input: {
       to: [input.to],
       subject,
       html,
+      ...(attachments ? { attachments } : {}),
     }),
   })
 

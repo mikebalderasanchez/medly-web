@@ -26,6 +26,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ deviceI
           deviceId,
           expediente: null,
           prescriptionAnalysis: null,
+          clinicPatientId: null,
+          clinicPrescriptionDraft: null,
         },
         { headers: corsHeaders }
       )
@@ -38,6 +40,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ deviceI
         deviceId,
         expediente: doc?.expediente ?? null,
         prescriptionAnalysis: doc?.prescriptionAnalysis ?? null,
+        clinicPatientId: doc?.clinicPatientId?.trim() || null,
+        clinicPrescriptionDraft: doc?.clinicPrescriptionDraft ?? null,
       },
       { headers: corsHeaders }
     )

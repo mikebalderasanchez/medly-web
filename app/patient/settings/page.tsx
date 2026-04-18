@@ -10,6 +10,8 @@ import {
 } from "@/lib/clinic-settings"
 import { PATIENT_PRESCRIPTION_STORAGE_KEY } from "@/lib/patient-prescription-context"
 import { PATIENT_EXPEDIENTE_STORAGE_KEY } from "@/lib/patient-expediente"
+import { PATIENT_CLINIC_PATIENT_ID_KEY } from "@/lib/patient-clinic-link"
+import { PATIENT_CLINIC_PRESCRIPTION_STORAGE_KEY } from "@/lib/patient-clinic-prescription-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -29,6 +31,8 @@ export default function PatientSettingsPage() {
     try {
       window.sessionStorage.removeItem(PATIENT_PRESCRIPTION_STORAGE_KEY)
       window.sessionStorage.removeItem(PATIENT_EXPEDIENTE_STORAGE_KEY)
+      window.sessionStorage.removeItem(PATIENT_CLINIC_PATIENT_ID_KEY)
+      window.sessionStorage.removeItem(PATIENT_CLINIC_PRESCRIPTION_STORAGE_KEY)
     } catch {
     }
     window.alert("Datos locales del paciente eliminados. Vuelve a Inicio o a Recetas si necesitas regenerar el contexto.")

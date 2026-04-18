@@ -1,21 +1,15 @@
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Search, Plus, FileAudio, FileText } from "lucide-react"
+import { Plus } from "lucide-react"
 import Link from "next/link"
+import { ConsultationsList } from "@/components/clinic/consultations-list"
 import { CLINIC_DEMO_CONSULTATIONS, listClinicConsultationsFromDb } from "@/lib/clinic-repository"
 import {
   isAtlasConfigured,
   mongoConnectionUserHint,
   mongoUriLikelyHasUnencodedPassword,
 } from "@/lib/mongodb"
+
+export const dynamic = "force-dynamic"
 
 function DataNotice(props: {
   variant: "demo" | "mongo" | "error"
@@ -80,6 +74,10 @@ export default async function ConsultationsPage() {
       if (rows !== null) {
         consultations = rows
         mode = "mongo"
+      } else {
+        consultations = []
+        mode = "error"
+        connectionError = "MongoDB no devolvió datos (revisa MONGODB_URI y que el servidor pueda conectar)."
       }
     } catch (e) {
       connectionError = e instanceof Error ? e.message : String(e)
@@ -111,72 +109,7 @@ export default async function ConsultationsPage() {
         connectionHint={connectionHint}
       />
 
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input type="search" placeholder="Buscar por paciente, motivo..." className="pl-8" />
-        </div>
-      </div>
-
-      <div className="rounded-md border bg-card overflow-hidden">
-        <Table>
-          <TableHeader className="bg-muted/50">
-            <TableRow>
-              <TableHead className="w-[100px]">ID</TableHead>
-              <TableHead>Paciente</TableHead>
-              <TableHead>Fecha y Hora</TableHead>
-              <TableHead>Motivo</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {consultations.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground h-24 text-center">
-                  No hay consultas guardadas. Registra audio en <span className="font-medium">Iniciar Consulta</span> y
-                  pulsa <span className="font-medium">Guardar en Expediente</span>.
-                </TableCell>
-              </TableRow>
-            ) : (
-              consultations.map((consultation) => (
-                <TableRow key={consultation.id}>
-                  <TableCell
-                    className="font-mono text-xs font-medium max-w-[120px] truncate"
-                    title={consultation.id}
-                  >
-                    #{consultation.id}
-                  </TableCell>
-                  <TableCell>{consultation.patient}</TableCell>
-                  <TableCell>{consultation.date}</TableCell>
-                  <TableCell>{consultation.reason}</TableCell>
-                  <TableCell>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        consultation.status === "Completada"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
-                      }`}
-                    >
-                      {consultation.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" title="Transcripción (próximamente)" type="button" disabled>
-                        <FileAudio className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                      <Button variant="ghost" size="icon" title="Resumen (próximamente)" type="button" disabled>
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <ConsultationsList initialRows={consultations} mongo={mode === "mongo"} />
     </div>
   )
 }

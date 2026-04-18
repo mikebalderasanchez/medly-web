@@ -8,6 +8,8 @@ import type {
   ClinicPatientDoc,
   ClinicPatientListRow,
 } from "@/lib/clinic-types"
+import { clinicPrescriptionToAnalysis } from "@/lib/clinic-prescription-bridge"
+import { setClinicPrescriptionDraftForAllSessionsOfPatient } from "@/lib/patient-atlas-session"
 import { randomUUID } from "node:crypto"
 
 export const CLINIC_DEMO_PATIENTS: ClinicPatientListRow[] = [
@@ -78,6 +80,72 @@ export async function getClinicPatientById(id: string): Promise<ClinicPatientDoc
   await ensureClinicIndexes()
   const doc = await db.collection<ClinicPatientDoc>(CLINIC_PATIENTS_COLLECTION).findOne({ id: id.trim() })
   return doc
+}
+
+/** Primer número en cadenas como "20" o "18 - 25"; 0 si no hay dígitos. */
+function parseAgeFromExtractionString(age: string | null | undefined): number {
+  if (!age?.trim()) return 0
+  const m = age.match(/\d+/)
+  if (!m) return 0
+  return Math.min(120, Math.max(0, parseInt(m[0], 10)))
+}
+
+function genderLabelFromExtraction(gender: ConsultationExtraction["patient"]["gender"]): string {
+  if (gender === "male") return "Masculino"
+  if (gender === "female") return "Femenino"
+  return ""
+}
+
+export async function findClinicPatientByNameCaseInsensitive(name: string): Promise<ClinicPatientDoc | null> {
+  if (!isAtlasConfigured()) return null
+  const db = await getMedlyDb()
+  if (!db) return null
+  await ensureClinicIndexes()
+  const n = name.trim()
+  if (!n) return null
+  const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return db.collection<ClinicPatientDoc>(CLINIC_PATIENTS_COLLECTION).findOne({
+    name: { $regex: new RegExp(`^${escaped}$`, "i") },
+  })
+}
+
+/**
+ * Si no hay patientId explícito, reutiliza expediente con el mismo nombre (sin distinguir mayúsculas)
+ * o crea uno con datos del JSON estructurado cuando existan.
+ */
+export async function ensureClinicPatientForConsultation(params: {
+  structured: ConsultationExtraction | null
+  resolvedName: string | null
+}): Promise<string | null> {
+  const name =
+    params.resolvedName?.trim() ||
+    params.structured?.patient?.name?.trim() ||
+    null
+  if (!name) return null
+
+  const existing = await findClinicPatientByNameCaseInsensitive(name)
+  if (existing) return existing.id
+
+  const p = params.structured?.patient
+  const parsedAge = p ? parseAgeFromExtractionString(p.age) : 0
+  const age = parsedAge > 0 ? parsedAge : 1
+  const gender = p ? genderLabelFromExtraction(p.gender) : ""
+  const bloodType = p?.bloodType?.trim() ?? ""
+  const allergies = p?.knownAllergies?.filter(Boolean).join(", ") ?? ""
+  const chronic = params.structured?.knownIllnesses?.filter(Boolean).join(", ") ?? ""
+
+  const created = await insertClinicPatient({
+    name,
+    age,
+    gender,
+    bloodType,
+    allergies,
+    chronicConditions: chronic,
+    phone: "",
+    email: "",
+    notes: "",
+  })
+  return created.id
 }
 
 export type CreateClinicPatientInput = {
@@ -375,6 +443,10 @@ export async function insertClinicConsultation(input: InsertClinicConsultationIn
   await db.collection<ClinicConsultationDoc>(CLINIC_CONSULTATIONS_COLLECTION).insertOne(doc)
   if (doc.patientId) {
     await touchClinicPatientLastVisit(doc.patientId)
+    await setClinicPrescriptionDraftForAllSessionsOfPatient(
+      doc.patientId,
+      clinicPrescriptionToAnalysis(doc.prescription)
+    )
   }
   return doc
 }

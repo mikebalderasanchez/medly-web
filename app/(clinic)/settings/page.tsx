@@ -65,8 +65,8 @@ export default function SettingsPage() {
         setAccountEmail(data.user.email)
         setSettings((s) => ({
           ...s,
-          displayName: data.user.displayName?.trim() || s.displayName,
-          specialty: data.user.specialty?.trim() || s.specialty,
+          displayName: data.user?.displayName?.trim() || s.displayName,
+          specialty: data.user?.specialty?.trim() || s.specialty,
         }))
       } catch {
       }
